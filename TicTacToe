@@ -1,0 +1,141 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.20;
+
+import "@openzeppelin/contracts/access/Ownable.sol";
+
+contract TicTacToe is Ownable {
+    // Struct for Game State
+    struct Game {
+        address playerX; // Player with 'X'
+        address playerO; // Player with 'O'
+        uint8[3][3] board; // 3x3 board: 0 (empty), 1 (X), 2 (O)
+        address currentPlayer; // Current turn
+        bool isActive; // Game status
+        address winner; // Winner, if any
+    }
+
+    // Mapping to store games
+    mapping(uint256 => Game) public games;
+    uint256 public nextGameId = 1;
+
+    // Events
+    event GameStarted(uint256 indexed gameId, address playerX, address playerO);
+    event MoveMade(uint256 indexed gameId, address player, uint8 row, uint8 col, uint8 value);
+    event GameEnded(uint256 indexed gameId, address winner, bool isDraw);
+    event GameReset(uint256 indexed gameId);
+
+    constructor() Ownable(msg.sender) {}
+
+    // Start a new game
+    function startGame(address playerO) external returns (uint256) {
+        require(playerO != address(0) && playerO != msg.sender, "Invalid opponent address");
+        require(!games[nextGameId].isActive, "Game ID already in use");
+
+        Game memory newGame;
+        newGame.playerX = msg.sender;
+        newGame.playerO = playerO;
+        newGame.currentPlayer = msg.sender; // Player X starts
+        newGame.isActive = true;
+        newGame.board = [[0, 0, 0], [0, 0, 0], [0, 0, 0]]; // Empty board
+
+        uint256 gameId = nextGameId++;
+        games[gameId] = newGame;
+
+        emit GameStarted(gameId, msg.sender, playerO);
+        return gameId;
+    }
+
+    // Make a move
+    function makeMove(uint256 gameId, uint8 row, uint8 col) external {
+        Game storage game = games[gameId];
+        require(game.isActive, "Game not active");
+        require(msg.sender == game.currentPlayer, "Not your turn");
+        require(row < 3 && col < 3, "Invalid position");
+        require(game.board[row][col] == 0, "Position already taken");
+
+        // Set move: 1 for X, 2 for O
+        uint8 value = (msg.sender == game.playerX) ? 1 : 2;
+        game.board[row][col] = value;
+        emit MoveMade(gameId, msg.sender, row, col, value);
+
+        // Check for winner or draw
+        if (checkWinner(game.board, value)) {
+            game.isActive = false;
+            game.winner = msg.sender;
+            emit GameEnded(gameId, msg.sender, false);
+        } else if (checkDraw(game.board)) {
+            game.isActive = false;
+            emit GameEnded(gameId, address(0), true);
+        } else {
+            // Switch turn
+            game.currentPlayer = (msg.sender == game.playerX) ? game.playerO : game.playerX;
+        }
+    }
+
+    // Reset a game (owner only)
+    function resetGame(uint256 gameId) external onlyOwner {
+        require(games[gameId].isActive, "Game not active");
+        games[gameId].isActive = false;
+        emit GameReset(gameId);
+    }
+
+    // Check for a winner
+    function checkWinner(uint8[3][3] memory board, uint8 value) internal pure returns (bool) {
+        // Check rows
+        for (uint8 i = 0; i < 3; i++) {
+            if (board[i][0] == value && board[i][1] == value && board[i][2] == value) {
+                return true;
+            }
+        }
+        // Check columns
+        for (uint8 j = 0; j < 3; j++) {
+            if (board[0][j] == value && board[1][j] == value && board[2][j] == value) {
+                return true;
+            }
+        }
+        // Check diagonals
+        if (board[0][0] == value && board[1][1] == value && board[2][2] == value) {
+            return true;
+        }
+        if (board[0][2] == value && board[1][1] == value && board[2][0] == value) {
+            return true;
+        }
+        return false;
+    }
+
+    // Check for a draw
+    function checkDraw(uint8[3][3] memory board) internal pure returns (bool) {
+        for (uint8 i = 0; i < 3; i++) {
+            for (uint8 j = 0; j < 3; j++) {
+                if (board[i][j] == 0) {
+                    return false; // Empty cell exists, not a draw
+                }
+            }
+        }
+        return true; // All cells filled, no winner
+    }
+
+    // Get game state
+    function getGameState(uint256 gameId)
+        external
+        view
+        returns (
+            address playerX,
+            address playerO,
+            uint8[3][3] memory board,
+            address currentPlayer,
+            bool isActive,
+            address winner
+        )
+    {
+        Game memory game = games[gameId];
+        return (
+            game.playerX,
+            game.playerO,
+            game.board,
+            game.currentPlayer,
+            game.isActive,
+            game.winner
+        );
+    }
+}
