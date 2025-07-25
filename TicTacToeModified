@@ -1,0 +1,242 @@
+import tkinter as tk
+from tkinter import messagebox, ttk
+import random
+import sqlite3
+from datetime import datetime
+import pygame
+
+class TicTacToe:
+    def __init__(self, root):
+        self.root = root
+        self.root.title("Modified Tic-Tac-Toe")
+        self.root.geometry("400x550")
+
+        # Initialize Pygame for sound
+        pygame.mixer.init()
+
+        # Game variables
+        self.board = [""] * 9
+        self.current_player = "X"
+        self.game_active = False
+        self.mode = "Human vs Human"
+        self.difficulty = "Easy"
+        self.scores = {"X": 0, "O": 0, "Draw": 0}
+
+        # Initialize SQLite database
+        self.conn = sqlite3.connect("tic_tac_toe_scores.db")
+        self.create_table()
+
+        # GUI Elements
+        tk.Label(root, text="Tic-Tac-Toe", font=("Arial", 16, "bold")).pack(pady=10)
+
+        # Mode selection
+        tk.Label(root, text="Select Mode:", font=("Arial", 12)).pack()
+        self.mode_var = tk.StringVar(value="Human vs Human")
+        ttk.Combobox(root, textvariable=self.mode_var, values=["Human vs Human", "Human vs AI"], state="readonly").pack()
+
+        # Difficulty selection (for AI mode)
+        tk.Label(root, text="Select AI Difficulty:", font=("Arial", 12)).pack()
+        self.difficulty_var = tk.StringVar(value="Easy")
+        ttk.Combobox(root, textvariable=self.difficulty_var, values=["Easy", "Hard"], state="readonly").pack()
+
+        # Score display
+        self.score_var = tk.StringVar(value="X: 0 | O: 0 | Draw: 0")
+        tk.Label(root, textvariable=self.score_var, font=("Arial", 12)).pack(pady=10)
+
+        # Game board
+        self.canvas = tk.Canvas(root, width=300, height=300)
+        self.canvas.pack(pady=10)
+        self.buttons = []
+        for i in range(3):
+            row = []
+            for j in range(3):
+                btn = tk.Button(self.canvas, text="", font=("Arial", 20), width=5, height=2,
+                                command=lambda x=i*3+j: self.make_move(x))
+                btn.place(x=j*100, y=i*100)
+                row.append(btn)
+            self.buttons.append(row)
+        self.draw_grid()
+
+        # Buttons
+        tk.Button(root, text="Start Game", command=self.start_game, font=("Arial", 12)).pack(pady=5)
+        tk.Button(root, text="View High Scores", command=self.view_high_scores, font=("Arial", 12)).pack(pady=5)
+
+    def create_table(self):
+        cursor = self.conn.cursor()
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS scores (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                winner TEXT,
+                mode TEXT NOT NULL,
+                difficulty TEXT NOT NULL,
+                date TEXT NOT NULL
+            )
+        ''')
+        self.conn.commit()
+
+    def draw_grid(self):
+        self.canvas.create_line(100, 0, 100, 300, fill="black", width=2)
+        self.canvas.create_line(200, 0, 200, 300, fill="black", width=2)
+        self.canvas.create_line(0, 100, 300, 100, fill="black", width=2)
+        self.canvas.create_line(0, 200, 300, 200, fill="black", width=2)
+
+    def visual_feedback(self, cell_index=None, win=False):
+        if cell_index is not None:
+            i, j = cell_index // 3, cell_index % 3
+            for _ in range(3):
+                self.buttons[i][j].config(bg="green" if win else "red")
+                self.root.update()
+                self.root.after(100)
+                self.buttons[i][j].config(bg="SystemButtonFace")
+                self.root.update()
+                self.root.after(100)
+        elif win:
+            for _ in range(3):
+                self.canvas.config(highlightbackground="green", highlightthickness=5)
+                self.root.update()
+                self.root.after(100)
+                self.canvas.config(highlightbackground="black", highlightthickness=2)
+                self.root.update()
+                self.root.after(100)
+
+    def play_sound(self, type="move"):
+        try:
+            sound_file = {"move": "move.wav", "win": "win.wav", "lose": "lose.wav"}[type]
+            pygame.mixer.Sound(sound_file).play()
+        except:
+            pass  # Skip sound if file not found
+
+    def start_game(self):
+        self.board = [""] * 9
+        self.current_player = "X"
+        self.game_active = True
+        self.mode = self.mode_var.get()
+        self.difficulty = self.difficulty_var.get()
+        for i in range(3):
+            for j in range(3):
+                self.buttons[i][j].config(text="", state="normal", bg="SystemButtonFace")
+        if self.mode == "Human vs AI" and self.current_player == "O":
+            self.ai_move()
+
+    def make_move(self, index):
+        if not self.game_active or self.board[index] != "":
+            self.visual_feedback(index, win=False)
+            self.play_sound("lose")
+            return
+        self.board[index] = self.current_player
+        i, j = index // 3, index % 3
+        self.buttons[i][j].config(text=self.current_player, state="disabled")
+        self.visual_feedback(index, win=True)
+        self.play_sound("move")
+        if self.check_winner():
+            self.scores[self.current_player] += 1
+            self.score_var.set(f"X: {self.scores['X']} | O: {self.scores['O']} | Draw: {self.scores['Draw']}")
+            self.game_active = False
+            self.save_score(self.current_player)
+            messagebox.showinfo("Game Over", f"{self.current_player} wins!")
+            self.visual_feedback(win=True)
+            self.play_sound("win")
+            return
+        if "" not in self.board:
+            self.scores["Draw"] += 1
+            self.score_var.set(f"X: {self.scores['X']} | O: {self.scores['O']} | Draw: {self.scores['Draw']}")
+            self.game_active = False
+            self.save_score("Draw")
+            messagebox.showinfo("Game Over", "It's a draw!")
+            self.play_sound("lose")
+            return
+        self.current_player = "O" if self.current_player == "X" else "X"
+        if self.mode == "Human vs AI" and self.current_player == "O":
+            self.ai_move()
+
+    def check_winner(self):
+        # Check rows, columns, diagonals
+        for i in range(3):
+            if self.board[i*3] == self.board[i*3+1] == self.board[i*3+2] != "":
+                return True
+            if self.board[i] == self.board[i+3] == self.board[i+6] != "":
+                return True
+        if self.board[0] == self.board[4] == self.board[8] != "":
+            return True
+        if self.board[2] == self.board[4] == self.board[6] != "":
+            return True
+        return False
+
+    def ai_move(self):
+        if self.difficulty == "Easy":
+            available = [i for i, cell in enumerate(self.board) if cell == ""]
+            if available:
+                index = random.choice(available)
+                self.make_move(index)
+        else:  # Hard mode (minimax)
+            best_score = -float("inf")
+            best_move = None
+            for i in range(9):
+                if self.board[i] == "":
+                    self.board[i] = "O"
+                    score = self.minimax(0, False)
+                    self.board[i] = ""
+                    if score > best_score:
+                        best_score = score
+                        best_move = i
+            if best_move is not None:
+                self.make_move(best_move)
+
+    def minimax(self, depth, is_maximizing):
+        if self.check_winner():
+            return 1 if is_maximizing else -1
+        if "" not in self.board:
+            return 0
+        if is_maximizing:
+            best_score = -float("inf")
+            for i in range(9):
+                if self.board[i] == "":
+                    self.board[i] = "O"
+                    score = self.minimax(depth + 1, False)
+                    self.board[i] = ""
+                    best_score = max(score, best_score)
+            return best_score
+        else:
+            best_score = float("inf")
+            for i in range(9):
+                if self.board[i] == "":
+                    self.board[i] = "X"
+                    score = self.minimax(depth + 1, True)
+                    self.board[i] = ""
+                    best_score = min(score, best_score)
+            return best_score
+
+    def save_score(self, winner):
+        cursor = self.conn.cursor()
+        cursor.execute("INSERT INTO scores (winner, mode, difficulty, date) VALUES (?, ?, ?, ?)",
+                      (winner, self.mode, self.difficulty, datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
+        self.conn.commit()
+
+    def view_high_scores(self):
+        highscore_window = tk.Toplevel(self.root)
+        highscore_window.title("High Scores")
+        highscore_window.geometry("400x300")
+
+        tree = ttk.Treeview(highscore_window, columns=("Winner", "Mode", "Difficulty", "Date"), show="headings")
+        tree.heading("Winner", text="Winner")
+        tree.heading("Mode", text="Mode")
+        tree.heading("Difficulty", text="Difficulty")
+        tree.heading("Date", text="Date")
+        tree.column("Winner", width=80)
+        tree.column("Mode", width=100)
+        tree.column("Difficulty", width=80)
+        tree.column("Date", width=120)
+        tree.pack(fill="both", expand=True, padx=10, pady=10)
+
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT winner, mode, difficulty, date FROM scores ORDER BY date DESC LIMIT 10")
+        for row in cursor.fetchall():
+            tree.insert("", tk.END, values=row)
+
+    def __del__(self):
+        self.conn.close()
+
+if __name__ == "__main__":
+    root = tk.Tk()
+    app = TicTacToe(root)
+    root.mainloop()
