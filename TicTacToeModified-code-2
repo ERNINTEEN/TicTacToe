@@ -1,0 +1,9 @@
+from cryptography.fernet import Fernet
+def save_score(self, winner):
+    key = Fernet.generate_key()
+    cipher = Fernet(key)
+    encrypted_winner = cipher.encrypt(winner.encode()).decode()
+    cursor = self.conn.cursor()
+    cursor.execute("INSERT INTO scores (winner, mode, difficulty, date) VALUES (?, ?, ?, ?)",
+                  (encrypted_winner, self.mode, self.difficulty, datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
+    self.conn.commit()
