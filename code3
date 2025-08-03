@@ -1,0 +1,12 @@
+{
+        Game memory game = games[gameId];
+        return (
+            game.playerX,
+            game.playerO,
+            game.board,
+            game.currentPlayer,
+            game.isActive,
+            game.winner
+        );
+    }
+}
