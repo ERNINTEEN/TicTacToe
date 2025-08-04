@@ -1,0 +1,8 @@
+ // Get game state
+    function getGameState(uint256 gameId)
+        external
+        view
+        returns (
+            address playerX,
+            address playerO,
+            uint8[3][3] memory board,
