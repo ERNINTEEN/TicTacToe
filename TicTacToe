@@ -115,14 +115,7 @@ contract TicTacToe is Ownable {
         return true; // All cells filled, no winner
     }
 
-    // Get game state
-    function getGameState(uint256 gameId)
-        external
-        view
-        returns (
-            address playerX,
-            address playerO,
-            uint8[3][3] memory board,
+   
             address currentPlayer,
             bool isActive,
             address winner
