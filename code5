@@ -1,0 +1,6 @@
+
+            address currentPlayer,
+            bool isActive,
+            address winner
+        )
+    
