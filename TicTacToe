@@ -116,8 +116,3 @@ contract TicTacToe is Ownable {
     }
 
    
-            address currentPlayer,
-            bool isActive,
-            address winner
-        )
-    
