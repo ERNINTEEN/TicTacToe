@@ -11,7 +11,7 @@ contract TicTacToe is Ownable {
         uint8[3][3] board; // 3x3 board: 0 (empty), 1 (X), 2 (O)
         address currentPlayer; // Current turn
         bool isActive; // Game status
-        address winner; // Winner, if any
+        address winner; // winner, if any
     }
 
     // Mapping to store games
